@@ -53,11 +53,8 @@ The `members` table is composed of :
 **Init**
 
 ```sql
-DROP SCHEMA IF EXISTS v_dannys_diner CASCADE; 
-CREATE SCHEMA v_dannys_diner;
-
-DROP VIEW IF EXISTS v_dannys_diner.sales_menu;
-CREATE VIEW v_dannys_diner.sales_menu AS 
+DROP VIEW IF EXISTS dannys_diner.sales_menu;
+CREATE VIEW dannys_diner.sales_menu AS 
 SELECT 
   sales.customer_id, 
   sales.order_date,
@@ -88,7 +85,7 @@ LEFT JOIN dannys_diner.members
 SELECT 
   customer_id, 
   SUM(price) AS total_price
-FROM v_dannys_diner.sales_menu
+FROM dannys_diner.sales_menu
 GROUP BY 1
 ORDER BY 2 DESC; 
 ```
@@ -346,4 +343,3 @@ SELECT
   END AS ranking
 FROM v_dannys_diner.sales_menu;
 ```
-
