@@ -26,7 +26,7 @@ Six datasets :
 
 ## ERD 
 
-![erd](img/erd.PNG)
+![erd](img/erd_pizza_runner.png)
 
 
 ## TABLE 1 : RUNNERS 
@@ -59,11 +59,15 @@ The `runners_orders` table is composed of :
 - **duration** - time to deliver the pizza
 - **cancellation** - if there is a restaurant cancellation or a customer cancellation
 
+![runner_orders_table](img/runner_orders_table.PNG)
+
 ## TABLE 4 : PIZZA_NAMES
 
 The `pizza_names` table is composed of : 
 - **pizza_id** - PRIMARY KEY
 - **pizza_name** - name of the pizza
+
+![pizza_names_table](img/pizza_names_table.PNG)
 
 ## TABLE 5 : PIZZA_RECIPES
 
@@ -71,11 +75,15 @@ The `pizza_recipes` table is composed of :
 - **pizza_id** - FOREIGN KEY
 - **toppings** - ingrediens on the pizza
 
+![pizza_recipes_table](img/pizza_recipes_table.PNG)
+
 ## TABLE 6 : PIZZA_TOPPINGS
 
 The `pizza_toppings` table is composed of : 
 - **topping_id** - PRIMARY KEY
 - **topping_name** - ingredient name
+
+![pizza_toppings_table](img/pizza_toppings_table.PNG)
 
 # CASE STUDY 
 
