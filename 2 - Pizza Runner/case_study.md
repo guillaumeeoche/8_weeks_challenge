@@ -120,7 +120,8 @@ FROM pizza_runner.customer_orders;
 
 DROP VIEW IF EXISTS v_pizza_runner.runner_orders; 
 CREATE VIEW v_pizza_runner.runner_orders AS
-SELECT 
+WITH cte_wrong_types AS (
+  SELECT 
   order_id, 
   runner_id,
   CASE 
@@ -155,7 +156,17 @@ SELECT
     cancellation = 'null' THEN NULL
     ELSE cancellation
   END AS cancellation
-FROM pizza_runner.runner_orders;
+FROM pizza_runner.runner_orders
+)
+SELECT 
+  order_id, 
+  runner_id, 
+  pickup_time::TIMESTAMP WITHOUT TIME ZONE, 
+  distance::NUMERIC, 
+  duration::NUMERIC, 
+  cancellation::TEXT
+FROM cte_wrong_types;
+
 
 
 DROP VIEW IF EXISTS v_pizza_runner.pizza_names; 
@@ -181,7 +192,12 @@ CREATE VIEW v_pizza_runner.pizza_join AS
 SELECT 
   customer_orders.*, 
   runner_orders.cancellation, 
-  pizza_names.pizza_name
+  pizza_names.pizza_name, 
+  runner_orders.runner_id, 
+  runner_orders.pickup_time,
+  runner_orders.duration, 
+  runner_orders.distance,
+  DATE_PART('minute', AGE(pickup_time, order_time))::INTEGER AS pickup_minutes
 FROM v_pizza_runner.customer_orders
 LEFT JOIN v_pizza_runner.runner_orders   
   ON customer_orders.order_id = runner_orders.order_id
@@ -357,3 +373,151 @@ GROUP BY 1
 ORDER BY 1;
 ```
 ![result_q_10](img/result_q_10.PNG)
+
+## Runner and Customer Experience
+
+## **Q1**
+
+> How many runners signed up for each 1 week period? (i.e. week starts 2021-01-01)
+
+```sql
+SELECT 
+  DATE_TRUNC('week', registration_date)::DATE + 4 AS registration_week, 
+  COUNT(*) AS runners_count
+FROM v_pizza_runner.runners
+GROUP BY 1
+ORDER BY 1;
+```
+![result_q_2_1](img/result_q_2_1.PNG)
+
+## **Q2**
+
+> What was the average time in minutes it took for each runner to arrive at the Pizza Runner HQ to pickup the order?
+
+*We have to modify the type of duration*
+
+```sql
+WITH cte_diff_time AS (
+  SELECT DISTINCT
+    order_id,
+    pickup_time, 
+    order_time, 
+    DATE_PART('minute', AGE(pickup_time, order_time))::INTEGER AS pickup_minutes
+  FROM v_pizza_runner.pizza_join
+  WHERE cancellation IS NULL
+) 
+SELECT 
+  ROUND(AVG(pickup_minutes), 3) AS avg_pickup_minutes
+FROM cte_diff_time;
+```
+![result_q_2_2](img/result_q_2_2.PNG)
+
+## **Q3**
+
+> Is there any relationship between the number of pizzas and how long the order takes to prepare?
+
+```sql
+SELECT DISTINCT
+  order_id,
+  pickup_minutes, 
+  COUNT(pizza_id) AS pizza_count
+FROM v_pizza_runner.pizza_join
+WHERE cancellation IS NULL
+GROUP BY 1, 2
+ORDER BY 3;
+```
+
+![result_q_2_3](img/result_q_2_3.PNG)
+
+## **Q4**
+
+> What was the average distance travelled for each customer?
+
+```sql
+SELECT 
+  customer_id,
+  ROUND(AVG(DISTINCT distance), 1) AS avg_distance
+FROM v_pizza_runner.pizza_join
+WHERE cancellation IS NULL
+GROUP BY 1
+ORDER BY 1;
+```
+
+![result_q_2_4](img/result_q_2_4.PNG)
+
+## **Q5**
+
+> What was the difference between the longest and shortest delivery times for all orders?
+
+```sql
+SELECT 
+  MAX(duration) - MIN(duration) AS max_diff_delivery_time
+FROM v_pizza_runner.runner_orders
+WHERE cancellation IS NULL;
+```
+
+**DIFF : 30**
+
+## **Q6**
+
+> What was the average speed for each runner for each delivery and do you notice any trend for these values?
+
+```sql
+WITH cte_trend_speed_time AS (
+  SELECT 
+    runner_id, 
+    order_id,
+    AVG(distance/duration) AS avg_km_per_minutes
+  FROM v_pizza_runner.pizza_join 
+  WHERE cancellation IS NULL
+  GROUP BY 1, 2
+  ORDER BY 1, 2
+) 
+SELECT  
+  runner_id, 
+  order_id,
+  ROUND(avg_km_per_minutes * 60, 1) AS avg_km_per_hours, 
+  ROUND(
+    100 * (avg_km_per_minutes*60 - LAG(avg_km_per_minutes*60) OVER(PARTITION BY runner_id ORDER BY avg_km_per_minutes*60))/
+    LAG(avg_km_per_minutes*60) OVER(PARTITION BY runner_id ORDER BY avg_km_per_minutes*60)::NUMERIC, 
+    1
+  ) AS trend_speed
+FROM cte_trend_speed_time
+ORDER BY 1, 2;
+```
+
+![result_q_2_6](img/result_q_2_6.PNG)
+
+## **Q7**
+
+> What is the successful delivery percentage for each runner?
+
+```sql 
+WITH cte_success_percentage AS (
+  SELECT 
+    runner_id,
+    SUM(
+      CASE 
+        WHEN cancellation IS NULL THEN 1 
+        ELSE 0
+      END
+    ) AS successful_delivery, 
+    SUM(
+      CASE 
+        WHEN cancellation IS NOT NULL THEN 1 
+        ELSE 0
+      END
+    ) AS cancelled_delivery
+  FROM v_pizza_runner.runner_orders
+  GROUP BY 1
+)
+SELECT 
+  runner_id, 
+  successful_delivery, 
+  cancelled_delivery, 
+  100 * successful_delivery / (successful_delivery + cancelled_delivery) AS success_percentage
+FROM cte_success_percentage
+ORDER BY 4 DESC;
+```
+![result_q_2_7](img/result_q_2_7.PNG)
+
