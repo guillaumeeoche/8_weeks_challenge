@@ -538,5 +538,103 @@ We focused our analysis into the pizzas, customers and runners. Now, we want to 
 > What are the standard ingredients for each pizza?
 
 ```sql
-
+WITH cte_separate_string AS (
+  SELECT  
+    UNNEST(STRING_TO_ARRAY(toppings, ','))::NUMERIC AS topping_id,
+    pizza_id
+  FROM v_pizza_runner.pizza_recipes
+), 
+pizza_toppings_join AS (
+  SELECT 
+    cte_separate_string.*, 
+    pizza_toppings.topping_name 
+  FROM cte_separate_string 
+  LEFT JOIN v_pizza_runner.pizza_toppings 
+    ON cte_separate_string.topping_id = pizza_toppings.topping_id
+)
+SELECT 
+  pizza_id, 
+  STRING_AGG(topping_name, ', ') AS toppings
+FROM pizza_toppings_join
+GROUP BY 1
+ORDER BY 1; 
 ```
+
+![result_q_3_1](img/result_q_3_1.PNG)
+
+## **Q2**
+
+> What was the most commonly added extra?
+
+```sql 
+WITH cte_separate_string AS (
+  SELECT  
+    order_id,
+    pizza_id, 
+    --UNNEST(STRING_TO_ARRAY(exclusions, ','))::NUMERIC AS exclusion_id
+    UNNEST(STRING_TO_ARRAY(extras, ','))::NUMERIC AS extra_id
+  FROM v_pizza_runner.customer_orders
+), 
+pizza_toppings_join AS (
+  SELECT 
+    --cte_separate_string.exclusion_id, 
+    cte_separate_string.extra_id, 
+    pizza_toppings.topping_name 
+  FROM cte_separate_string 
+  LEFT JOIN v_pizza_runner.pizza_toppings 
+    --ON cte_separate_string.exclusion_id = pizza_toppings.topping_id
+    ON cte_separate_string.extra_id = pizza_toppings.topping_id
+)
+SELECT 
+  topping_name, 
+  COUNT(*) AS topping_count
+FROM pizza_toppings_join
+GROUP BY 1
+ORDER BY 2 DESC; 
+```
+![result_q_3_2](img/result_q_3_2.PNG)
+
+
+## **Q3**
+
+> What was the most common exclusion?
+
+We can take the same query as before and just uncomment few lines. 
+
+```sql
+WITH cte_separate_string AS (
+  SELECT  
+    order_id,
+    pizza_id, 
+    UNNEST(STRING_TO_ARRAY(exclusions, ','))::NUMERIC AS exclusion_id
+    --UNNEST(STRING_TO_ARRAY(extras, ','))::NUMERIC AS extra_id
+  FROM v_pizza_runner.customer_orders
+), 
+pizza_toppings_join AS (
+  SELECT 
+    cte_separate_string.exclusion_id, 
+    --cte_separate_string.extra_id, 
+    pizza_toppings.topping_name 
+  FROM cte_separate_string 
+  LEFT JOIN v_pizza_runner.pizza_toppings 
+    ON cte_separate_string.exclusion_id = pizza_toppings.topping_id
+    --ON cte_separate_string.extra_id = pizza_toppings.topping_id
+)
+SELECT 
+  topping_name, 
+  COUNT(*) AS topping_count
+FROM pizza_toppings_join
+GROUP BY 1
+ORDER BY 2 DESC; 
+```
+![result_q_3_3](img/result_q_3_3.PNG)
+
+
+## **Q4**
+
+> Generate an order item for each record in the customers_orders table in the format of one of the following:
+> * Meat Lovers
+> * Meat Lovers - Exclude Beef
+> * Meat Lovers - Extra Bacon
+> * Meat Lovers - Exclude Cheese, Bacon - Extra Mushroom, Peppers
+
