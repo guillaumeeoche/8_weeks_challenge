@@ -529,3 +529,14 @@ ORDER BY 4 DESC;
 ```
 ![result_q_2_7](img/result_q_2_7.PNG)
 
+# Ingredient Optimisation 
+
+We focused our analysis into the pizzas, customers and runners. Now, we want to knoz more about the toppings. What toppings are the most purchases ? 
+
+## **Q1**
+
+> What are the standard ingredients for each pizza?
+
+```sql
+
+```
