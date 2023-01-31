@@ -123,7 +123,8 @@ SELECT
     extras = 'null' THEN NULL 
     ELSE extras
   END AS extras,
-  order_time
+  order_time, 
+  ROW_NUMBER() OVER(PARTITION BY order_id) AS _row_number
 FROM pizza_runner.customer_orders;
 
 DROP VIEW IF EXISTS v_pizza_runner.runner_orders; 
@@ -638,3 +639,192 @@ ORDER BY 2 DESC;
 > * Meat Lovers - Extra Bacon
 > * Meat Lovers - Exclude Cheese, Bacon - Extra Mushroom, Peppers
 
+```sql
+DROP TABLE IF EXISTS exclude_toppings; 
+CREATE TEMP TABLE exclude_toppings AS (
+  WITH cte_separate_string AS (
+    SELECT 
+      order_id,
+      pizza_id, 
+      exclusions,
+      UNNEST(STRING_TO_ARRAY(exclusions, ','))::NUMERIC AS exclusion_id
+    FROM v_pizza_runner.customer_orders
+  ), 
+  cte_agg_string AS (
+    SELECT DISTINCT 
+      cte_separate_string.order_id, 
+      cte_separate_string.pizza_id, 
+      cte_separate_string.exclusion_id, 
+      pizza_toppings.topping_name
+    FROM cte_separate_string
+    INNER JOIN v_pizza_runner.pizza_toppings 
+      ON cte_separate_string.exclusion_id = pizza_toppings.topping_id
+  )
+  SELECT 
+    order_id, 
+    pizza_id, 
+    CONCAT('Exclude ', STRING_AGG(topping_name, ', ')) AS exclusion_toppings
+  FROM cte_agg_string
+  GROUP BY order_id, pizza_id
+);
+
+DROP TABLE IF EXISTS extra_toppings; 
+CREATE TEMP TABLE extra_toppings AS (
+  WITH cte_separate_string AS (
+    SELECT 
+      order_id,
+      pizza_id, 
+      exclusions,
+      UNNEST(STRING_TO_ARRAY(extras, ','))::NUMERIC AS extra_id
+    FROM v_pizza_runner.customer_orders
+  ), 
+  cte_agg_string AS (
+    SELECT DISTINCT 
+      cte_separate_string.order_id, 
+      cte_separate_string.pizza_id, 
+      cte_separate_string.extra_id, 
+      pizza_toppings.topping_name
+    FROM cte_separate_string
+    INNER JOIN v_pizza_runner.pizza_toppings 
+      ON cte_separate_string.extra_id = pizza_toppings.topping_id
+  )
+  SELECT 
+    order_id, 
+    pizza_id, 
+    CONCAT('Extra ', STRING_AGG(topping_name, ', ')) AS extra_toppings
+  FROM cte_agg_string
+  GROUP BY order_id, pizza_id
+);
+
+WITH agg_string_type AS (
+  SELECT 
+    customer_orders.order_id, 
+    customer_orders.customer_id, 
+    customer_orders.pizza_id, 
+    pizza_names.pizza_name, 
+    customer_orders.exclusions, 
+    CASE 
+      WHEN exclusions IS NOT NULL THEN exclude_toppings.exclusion_toppings
+      ELSE '' 
+    END AS exclusion_toppings, 
+    customer_orders.extras, 
+    CASE 
+      WHEN extras IS NOT NULL THEN extra_toppings.extra_toppings
+      ELSE '' 
+    END AS extra_toppings
+  FROM v_pizza_runner.customer_orders
+  LEFT JOIN v_pizza_runner.pizza_names 
+    ON customer_orders.pizza_id = pizza_names.pizza_id
+  LEFT JOIN exclude_toppings 
+    ON customer_orders.order_id = exclude_toppings.order_id 
+    AND customer_orders.pizza_id = exclude_toppings.pizza_id
+  LEFT JOIN extra_toppings 
+    ON customer_orders.order_id = extra_toppings.order_id 
+    AND customer_orders.pizza_id = extra_toppings.pizza_id
+)
+SELECT 
+  order_id, 
+  customer_id, 
+  pizza_id, 
+  pizza_name, 
+  exclusion_toppings, 
+  extra_toppings, 
+  CASE 
+    WHEN exclusion_toppings != '' AND extra_toppings != '' THEN CONCAT(pizza_name, ' - ', exclusion_toppings, ' - ', extra_toppings)
+    WHEN exclusion_toppings != '' AND extra_toppings = '' THEN CONCAT(pizza_name, ' - ', exclusion_toppings)
+    WHEN exclusion_toppings = '' AND extra_toppings != '' THEN CONCAT(pizza_name, ' - ', extra_toppings)
+    ELSE pizza_name 
+  END AS pizza_long_name
+FROM agg_string_type;
+```
+
+![result_q_3_4](img/result_q_3_4.PNG)
+
+## **Q4**
+
+> Generate an alphabetically ordered comma separated ingredient list for each pizza order from the customer_orders table and add a 2x in front of any relevant ingredients
+
+**We reuse the `exclude_toppings` table that we created in the previous question for this question.**
+
+```sql
+DROP TABLE IF EXISTS text_preparation_recipe;
+CREATE TEMP TABLE text_preparation_recipe AS (
+  WITH cte_recipe AS (
+    SELECT
+      customer_orders.order_id, 
+      customer_orders.pizza_id,
+      customer_orders.customer_id,
+      UNNEST(STRING_TO_ARRAY(
+        CASE 
+          WHEN extras IS NOT NULL THEN CONCAT(pizza_recipes.toppings, ', ',  customer_orders.extras) 
+          ELSE pizza_recipes.toppings
+        END, 
+        ','
+      ))::NUMERIC AS topping_id, 
+      customer_orders._row_number
+    FROM v_pizza_runner.customer_orders 
+    INNER JOIN v_pizza_runner.pizza_recipes
+      ON customer_orders.pizza_id = pizza_recipes.pizza_id
+  ), 
+  cte_topping_number AS (
+    SELECT 
+      cte_recipe.order_id,
+      cte_recipe.pizza_id, 
+      cte_recipe.customer_id, 
+      cte_recipe.topping_id, 
+      pizza_toppings.topping_name, 
+      cte_recipe._row_number
+    FROM cte_recipe
+    LEFT JOIN exclude_toppings 
+      ON cte_recipe.pizza_id = exclude_toppings.pizza_id 
+      AND cte_recipe.customer_id = exclude_toppings.customer_id
+      AND cte_recipe.topping_id = exclude_toppings.exclusion_id 
+      AND cte_recipe._row_number = exclude_toppings._row_number
+    LEFT JOIN v_pizza_runner.pizza_toppings 
+      ON cte_recipe.topping_id = pizza_toppings.topping_id
+    WHERE exclusion_id IS NULL
+    ORDER BY order_id, pizza_id, topping_id
+  ),
+  cte_final_text AS (
+    SELECT 
+      order_id, 
+      pizza_id,
+      topping_id,
+      COUNT(topping_id) AS topping_number,
+      topping_name,
+      _row_number
+    FROM cte_topping_number
+    GROUP BY 1, 2, 3, 5, 6
+  )
+  SELECT 
+    order_id, 
+    topping_id,
+    pizza_id,
+    CASE
+      WHEN topping_number != 1 THEN CONCAT(topping_number, 'x', topping_name)
+      ELSE topping_name
+    END AS topping_name,
+    _row_number 
+  FROM cte_final_text
+); 
+
+WITH cte_full_recipe_with_pizza_name AS (
+  SELECT 
+    text_preparation_recipe.order_id, 
+    text_preparation_recipe.pizza_id,
+    text_preparation_recipe._row_number,
+    STRING_AGG(text_preparation_recipe.topping_name, ', ') AS full_recipe
+  FROM text_preparation_recipe 
+  GROUP BY 1, 2, 3
+) 
+SELECT 
+  cte_full_recipe_with_pizza_name.order_id,
+  cte_full_recipe_with_pizza_name.pizza_id, 
+  CONCAT(pizza_names.pizza_name, ': ', full_recipe) AS full_recipe
+FROM cte_full_recipe_with_pizza_name 
+LEFT JOIN v_pizza_runner.pizza_names
+  ON cte_full_recipe_with_pizza_name.pizza_id = pizza_names.pizza_id
+ORDER BY order_id, pizza_id;
+```
+
+![result_q_3_5](img/result_q_3_5.PNG)
