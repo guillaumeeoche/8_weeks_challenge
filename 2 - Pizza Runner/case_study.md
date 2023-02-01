@@ -212,6 +212,25 @@ LEFT JOIN v_pizza_runner.runner_orders
   ON customer_orders.order_id = runner_orders.order_id
 LEFT JOIN v_pizza_runner.pizza_names 
   ON customer_orders.pizza_id = pizza_names.pizza_id;
+  
+DROP TABLE IF EXISTS pizza_runner.customer_ratings;
+CREATE TABLE pizza_runner.customer_ratings (
+   order_id INT,
+   rating INT
+);
+
+INSERT INTO pizza_runner.customer_ratings(order_id, rating)
+SELECT 
+  order_id, 
+  FLOOR(1 + 5 * RANDOM()) AS rating
+FROM pizza_runner.runner_orders
+WHERE pickup_time IS NOT NULL; 
+  
+DROP VIEW IF EXISTS v_pizza_runner.customer_ratings; 
+CREATE VIEW v_pizza_runner.customer_ratings AS 
+SELECT
+  *
+FROM pizza_runner.customer_ratings; 
 ```
 
 ## Pizza Metrics 
@@ -645,17 +664,21 @@ CREATE TEMP TABLE exclude_toppings AS (
   WITH cte_separate_string AS (
     SELECT 
       order_id,
+      customer_id,
       pizza_id, 
       exclusions,
-      UNNEST(STRING_TO_ARRAY(exclusions, ','))::NUMERIC AS exclusion_id
+      UNNEST(STRING_TO_ARRAY(exclusions, ','))::NUMERIC AS exclusion_id, 
+      _row_number
     FROM v_pizza_runner.customer_orders
   ), 
   cte_agg_string AS (
     SELECT DISTINCT 
       cte_separate_string.order_id, 
+      cte_separate_string.customer_id,
       cte_separate_string.pizza_id, 
       cte_separate_string.exclusion_id, 
-      pizza_toppings.topping_name
+      pizza_toppings.topping_name, 
+      cte_separate_string._row_number
     FROM cte_separate_string
     INNER JOIN v_pizza_runner.pizza_toppings 
       ON cte_separate_string.exclusion_id = pizza_toppings.topping_id
@@ -740,7 +763,7 @@ FROM agg_string_type;
 
 ![result_q_3_4](img/result_q_3_4.PNG)
 
-## **Q4**
+## **Q5**
 
 > Generate an alphabetically ordered comma separated ingredient list for each pizza order from the customer_orders table and add a 2x in front of any relevant ingredients
 
@@ -828,3 +851,193 @@ ORDER BY order_id, pizza_id;
 ```
 
 ![result_q_3_5](img/result_q_3_5.PNG)
+
+
+## **Q6**
+
+> What is the total quantity of each ingredient used in all delivered pizzas sorted by most frequent first?
+
+**We can reuse the previoyus query.**
+
+```sql
+DROP TABLE IF EXISTS text_preparation_recipe;
+CREATE TEMP TABLE text_preparation_recipe AS (
+  WITH cte_recipe AS (
+    SELECT
+      customer_orders.order_id, 
+      customer_orders.pizza_id,
+      customer_orders.customer_id,
+      UNNEST(STRING_TO_ARRAY(
+        CASE 
+          WHEN extras IS NOT NULL THEN CONCAT(pizza_recipes.toppings, ', ',  customer_orders.extras) 
+          ELSE pizza_recipes.toppings
+        END, 
+        ','
+      ))::NUMERIC AS topping_id, 
+      customer_orders._row_number
+    FROM v_pizza_runner.customer_orders 
+    INNER JOIN v_pizza_runner.pizza_recipes
+      ON customer_orders.pizza_id = pizza_recipes.pizza_id
+  ), 
+  cte_topping_number AS (
+    SELECT 
+      cte_recipe.order_id,
+      cte_recipe.pizza_id, 
+      cte_recipe.customer_id, 
+      cte_recipe.topping_id, 
+      pizza_toppings.topping_name, 
+      cte_recipe._row_number
+    FROM cte_recipe
+    LEFT JOIN exclude_toppings 
+      ON cte_recipe.pizza_id = exclude_toppings.pizza_id 
+      AND cte_recipe.customer_id = exclude_toppings.customer_id
+      AND cte_recipe.topping_id = exclude_toppings.exclusion_id 
+      AND cte_recipe._row_number = exclude_toppings._row_number
+    LEFT JOIN v_pizza_runner.pizza_toppings 
+      ON cte_recipe.topping_id = pizza_toppings.topping_id
+    WHERE exclusion_id IS NULL
+    ORDER BY order_id, pizza_id, topping_id
+  )
+  SELECT * FROM cte_topping_number
+); 
+
+SELECT 
+  topping_name, 
+  COUNT(*) AS toppping_number
+FROM text_preparation_recipe
+GROUP BY 1 
+ORDER BY 2 DESC; 
+```
+
+![result_q_3_6](img/result_q_3_6.PNG)
+
+# Pricing and Ratings 
+
+## **Q1**
+
+> If a Meat Lovers pizza costs `$12` and Vegetarian costs `$10` and there were no charges for changes - how much money has Pizza Runner made so far if there are no delivery fees?
+
+```sql
+SELECT
+  SUM(
+    CASE
+      WHEN pizza_id = 1 THEN 12
+      ELSE 10
+    END
+  ) AS revenue
+FROM v_pizza_runner.customer_orders;
+```
+
+**Revenue : 160**
+
+## **Q2**
+
+> What if there was an additional `$1` charge for any pizza extras?
+* Add cheese is `$1` extra
+
+```sql
+WITH cte_pizza_price AS (
+  SELECT
+    runner_orders.order_id, 
+    runner_orders.runner_id,
+    customer_orders.pizza_id, 
+    customer_orders.extras, 
+    CASE 
+      WHEN pizza_id = 1 THEN 12
+      ELSE 10
+    END AS pizza_price, 
+    customer_orders._row_number
+  FROM v_pizza_runner.runner_orders
+  LEFT JOIN v_pizza_runner.customer_orders 
+    ON runner_orders.order_id = customer_orders.order_id 
+  WHERE cancellation IS NULL
+), 
+cte_pizza_extra_price AS (
+  SELECT 
+   order_id, 
+   runner_id, 
+   pizza_id, 
+   extras::NUMERIC, 
+   pizza_price, 
+   _row_number
+  FROM cte_pizza_price 
+  WHERE extras IS NULL
+  
+  UNION ALL
+  
+  SELECT 
+    order_id, 
+    runner_id, 
+    pizza_id, 
+    UNNEST(STRING_TO_ARRAY(extras, ','))::NUMERIC AS extras, 
+    pizza_price, 
+    _row_number
+  FROM cte_pizza_price
+), 
+cte_total_extra_price AS (
+  SELECT 
+    order_id, 
+    _row_number,
+    pizza_price,
+    SUM(
+      CASE 
+        WHEN extras IS NULL THEN 0 
+        WHEN extras = 4 THEN 2
+        ELSE 1
+      END
+    ) AS extra_price
+  FROM cte_pizza_extra_price
+  GROUP BY order_id, _row_number, pizza_price
+)
+SELECT
+  SUM(pizza_price + extra_price) AS revenue
+FROM cte_total_extra_price
+ORDER BY 1;
+```
+**Revenue : 143**
+
+## **Q3**
+
+> The Pizza Runner team now wants to add an additional ratings system that allows customers to rate their runner, how would you design an additional table for this new dataset - generate a schema for this new table and insert your own data for ratings for each successful customer order between 1 to 5.
+
+**Schema update.** You can find it in the beginning of this file. 
+
+## **Q4**
+
+```sql
+DROP TABLE IF EXISTS avg_runner_speed; 
+CREATE TEMP TABLE avg_runner_speed AS 
+SELECT 
+  runner_id, 
+  order_id,
+  ROUND(AVG(distance/duration)*60, 1) AS speed
+FROM v_pizza_runner.pizza_join 
+WHERE cancellation IS NULL
+GROUP BY 1, 2;
+
+SELECT DISTINCT
+  customer_id, 
+  pizza_join.order_id, 
+  pizza_join.runner_id, 
+  customer_ratings.rating, 
+  order_time, 
+  pickup_time, 
+  pickup_minutes, 
+  duration, 
+  avg_runner_speed.speed, 
+  COUNT(pizza_id) OVER(PARTITION BY customer_id, pizza_join.order_id) AS total_pizzas
+FROM v_pizza_runner.pizza_join
+LEFT JOIN v_pizza_runner.customer_ratings 
+  ON pizza_join.order_id = customer_ratings.order_id
+LEFT JOIN avg_runner_speed 
+  ON pizza_join.order_id = avg_runner_speed.order_id
+WHERE pickup_time IS NOT NULL
+ORDER BY 2, 1;
+```
+
+![result_q_4_4](img/result_q_4_4.PNG)
+
+## **Q5**
+
+> If a Meat Lovers pizza was `$12` and Vegetarian `$10` fixed prices with no cost for extras and each runner is paid `$0.30` per kilometre traveled - how much money does Pizza Runner have left over after these deliveries?
+
