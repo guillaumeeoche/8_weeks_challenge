@@ -1041,3 +1041,49 @@ ORDER BY 2, 1;
 
 > If a Meat Lovers pizza was `$12` and Vegetarian `$10` fixed prices with no cost for extras and each runner is paid `$0.30` per kilometre traveled - how much money does Pizza Runner have left over after these deliveries?
 
+```sql 
+WITH cte_income_with_fees AS (
+  SELECT 
+   order_id, 
+   distance,
+   SUM(CASE WHEN pizza_id = 1 THEN 1 ELSE 0 END) AS meatlover_count, 
+   SUM(CASE WHEN pizza_id = 2 THEN 1 ELSE 0 END) AS vegetarian_count
+  FROM v_pizza_runner.pizza_join
+  WHERE cancellation IS NULL
+  GROUP BY 1, 2
+) 
+SELECT 
+  ROUND(
+    SUM( 
+      12 * meatlover_count + 10 * vegetarian_count - 0.30 * distance 
+    ), 
+    2
+  ) AS revenue_without_fees
+FROM cte_income_with_fees; 
+```
+
+**revenue_withtout_fees : 94.44$**
+
+# Bonus Questions 
+
+```sql
+DROP TABLE IF EXISTS temp_pizza_names;
+CREATE TEMP TABLE temp_pizza_names AS
+SELECT * FROM pizza_runner.pizza_names;
+
+INSERT INTO temp_pizza_names(pizza_id, pizza_name)
+VALUES
+  (3, 'Supreme');
+
+DROP TABLE IF EXISTS temp_pizza_recipes;
+CREATE TEMP TABLE temp_pizza_recipes AS
+SELECT * FROM pizza_runner.pizza_recipes;
+
+INSERT INTO temp_pizza_recipes(pizza_id, toppings)
+SELECT
+  3,
+  STRING_AGG(topping_id::TEXT, ', ')
+FROM pizza_runner.pizza_toppings;
+
+SELECT * FROM temp_pizza_recipes;
+```
