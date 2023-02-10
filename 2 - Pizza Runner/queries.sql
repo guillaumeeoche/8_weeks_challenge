@@ -15,4 +15,11 @@ VALUES
 (3, '2021-01-08'), 
 (4, '2021-01-15'); 
 
+CREATE TABLE pizza_runner.customer_orders (
+    order_id INT, 
+    customer_id INT, 
+    pizza_id INT, 
+    exclusions INT, 
+    extras
+)
 
