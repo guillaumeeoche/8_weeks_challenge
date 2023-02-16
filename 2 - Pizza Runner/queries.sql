@@ -21,6 +21,5 @@ CREATE TABLE pizza_runner.customer_orders (
     pizza_id INT, 
     exclusions INT, 
     extras
-
 )
 
