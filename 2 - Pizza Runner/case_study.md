@@ -684,11 +684,13 @@ CREATE TEMP TABLE exclude_toppings AS (
       ON cte_separate_string.exclusion_id = pizza_toppings.topping_id
   )
   SELECT 
-    order_id, 
-    pizza_id, 
-    CONCAT('Exclude ', STRING_AGG(topping_name, ', ')) AS exclusion_toppings
+    order_id,
+    customer_id,  
+    pizza_id,
+    CONCAT('Exclude ', STRING_AGG(topping_name, ', ')) AS exclusion_toppings, 
+	_row_number
   FROM cte_agg_string
-  GROUP BY order_id, pizza_id
+  GROUP BY order_id, customer_id, pizza_id, _row_number
 );
 
 DROP TABLE IF EXISTS extra_toppings; 
@@ -741,6 +743,7 @@ WITH agg_string_type AS (
   LEFT JOIN exclude_toppings 
     ON customer_orders.order_id = exclude_toppings.order_id 
     AND customer_orders.pizza_id = exclude_toppings.pizza_id
+    AND customer_orders._row_number = exclude_toppings._row_number
   LEFT JOIN extra_toppings 
     ON customer_orders.order_id = extra_toppings.order_id 
     AND customer_orders.pizza_id = extra_toppings.pizza_id
@@ -751,14 +754,15 @@ SELECT
   pizza_id, 
   pizza_name, 
   exclusion_toppings, 
-  extra_toppings, 
+  extra_toppings,
   CASE 
     WHEN exclusion_toppings != '' AND extra_toppings != '' THEN CONCAT(pizza_name, ' - ', exclusion_toppings, ' - ', extra_toppings)
     WHEN exclusion_toppings != '' AND extra_toppings = '' THEN CONCAT(pizza_name, ' - ', exclusion_toppings)
     WHEN exclusion_toppings = '' AND extra_toppings != '' THEN CONCAT(pizza_name, ' - ', extra_toppings)
     ELSE pizza_name 
   END AS pizza_long_name
-FROM agg_string_type;
+FROM agg_string_type
+ORDER BY 1; 
 ```
 
 ![result_q_3_4](img/result_q_3_4.PNG)
@@ -767,7 +771,44 @@ FROM agg_string_type;
 
 > Generate an alphabetically ordered comma separated ingredient list for each pizza order from the customer_orders table and add a 2x in front of any relevant ingredients
 
-**We reuse the `exclude_toppings` table that we created in the previous question for this question.**
+**We reuse the `exclude_toppings` table that we created in the previous question for this question.** We have to add the `exclusion_id` column before. 
+
+```sql 
+DROP TABLE IF EXISTS exclude_toppings; 
+CREATE TEMP TABLE exclude_toppings AS (
+  WITH cte_separate_string AS (
+    SELECT 
+      order_id,
+      customer_id,
+      pizza_id, 
+      exclusions,
+      UNNEST(STRING_TO_ARRAY(exclusions, ','))::NUMERIC AS exclusion_id, 
+      _row_number
+    FROM v_pizza_runner.customer_orders
+  ), 
+  cte_agg_string AS (
+    SELECT DISTINCT 
+      cte_separate_string.order_id, 
+      cte_separate_string.customer_id,
+      cte_separate_string.pizza_id, 
+      cte_separate_string.exclusion_id, 
+      pizza_toppings.topping_name, 
+      cte_separate_string._row_number
+    FROM cte_separate_string
+    INNER JOIN v_pizza_runner.pizza_toppings 
+      ON cte_separate_string.exclusion_id = pizza_toppings.topping_id
+  )
+  SELECT 
+    order_id,
+    customer_id,  
+    pizza_id,
+	exclusion_id,
+    CONCAT('Exclude ', STRING_AGG(topping_name, ', ')) AS exclusion_toppings, 
+	_row_number
+  FROM cte_agg_string
+  GROUP BY order_id, customer_id, pizza_id, exclusion_id, _row_number
+);
+```
 
 ```sql
 DROP TABLE IF EXISTS text_preparation_recipe;
@@ -836,7 +877,7 @@ WITH cte_full_recipe_with_pizza_name AS (
     text_preparation_recipe.order_id, 
     text_preparation_recipe.pizza_id,
     text_preparation_recipe._row_number,
-    STRING_AGG(text_preparation_recipe.topping_name, ', ') AS full_recipe
+    STRING_AGG(text_preparation_recipe.topping_name, ', ' order by text_preparation_recipe.topping_name) AS full_recipe
   FROM text_preparation_recipe 
   GROUP BY 1, 2, 3
 ) 
