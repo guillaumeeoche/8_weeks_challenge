@@ -89,7 +89,7 @@ Trial of 7 days then pro monthly subscription
 - **CUSTOMER 19**
 Trial of 7 days then pro monthly subscription and annual subscription after 2 months. 
 
-## Data Analysus Questions
+## Data Analysis Questions
 
 ## **Q1**
 
