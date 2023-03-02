@@ -49,13 +49,51 @@ FROM v_foodie_fi.subscriptions;
 WITH cte_month_distribution AS (
   SELECT 
     *, 
-    DATE_TRUNC('month', start_date) AS day_of_month
+    TO_CHAR(start_date, 'Month') AS month
   FROM v_foodie_fi.subscriptions
   WHERE plan_id = 0
 )
 SELECT 
-  DATE_PART('month', day_of_month) AS month_number, 
-  COUNT(DISTINCT customer_id) AS trials_number
+  month, 
+  COUNT(*) AS trials_number
 FROM cte_month_distribution
 GROUP BY 1
-ORDER BY 1;
+ORDER BY 2 DESC; 
+
+
+--what plan start_date values occur after the year 2020 for our dataset? Show the breakdown by count of events for each plan_name
+
+SELECT 
+  plans.plan_id, 
+  plans.plan_name, 
+  COUNT(*) AS events 
+FROM v_foodie_fi.subscriptions
+LEFT JOIN v_foodie_fi.plans
+  ON subscriptions.plan_id =  plans.plan_id
+WHERE start_date > '2020-12-31'
+GROUP BY 1, 2
+ORDER BY 1; 
+
+--what is the customer count and percentage of customers who have churned rounded to 1 decimal place?
+
+
+WITH cte_flag_churn AS (
+  SELECT 
+    *, 
+    CASE 
+      WHEN plan_id = 4 THEN 1 
+      ELSE 0
+    END AS flag_churn 
+  FROM v_foodie_fi.subscriptions
+)
+SELECT 
+  flag_churn,
+  COUNT(*) AS churn_count,
+  ROUND( 
+    100 * COUNT(*) / SUM(COUNT(*)) OVER(), 
+    1
+  ) AS churn_percentage
+FROM cte_flag_churn
+GROUP BY 1;
+
+--how many customers have churned straight after their initial free trial - what percentage is this rounded to the nearest whole number?

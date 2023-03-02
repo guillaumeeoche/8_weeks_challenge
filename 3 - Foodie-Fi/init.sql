@@ -18,9 +18,9 @@ VALUES
 (4, 'churn', null); 
 
 CREATE TABLE foodie_fi.subscriptions(
-   customer_id INTEGER  NOT NULL PRIMARY KEY 
+   customer_id INTEGER  NOT NULL  
   ,plan_id     INTEGER  NOT NULL
-  ,start_date  VARCHAR(24) NOT NULL
+  ,start_date  DATE NOT NULL
 );
 
 INSERT INTO foodie_fi.subscriptions(customer_id,plan_id,start_date) VALUES (1,0,'2020-08-01');
