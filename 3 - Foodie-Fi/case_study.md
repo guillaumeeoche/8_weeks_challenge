@@ -141,6 +141,8 @@ GROUP BY 1, 2
 ORDER BY 1; 
 ```
 
+![q2_2](img/q2_3.png)
+
 ## **Q4**
 
 > What is the customer count and percentage of customers who have churned rounded to 1 decimal place?
@@ -166,6 +168,105 @@ FROM cte_flag_churn
 GROUP BY 1;
 ```
 
+![q2_4](img/q2_4.png)
+
 ## **Q5**
 
 > How many customers have churned straight after their initial free trial - what percentage is this rounded to the nearest whole number?
+
+```sql
+WITH cte_previous_plan AS (
+  SELECT 
+    *, 
+    LAG(plan_id) OVER(
+      PARTITION BY customer_id
+      ORDER BY start_date) AS previous_plan 
+  FROM v_foodie_fi.subscriptions
+),
+cte_flag_churn_after_trial AS (
+  SELECT
+    *, 
+    CASE 
+      WHEN plan_id = 4 AND previous_plan = 0 THEN 1
+      ELSE 0
+    END AS flag_churn_after_trial
+  FROM cte_previous_plan
+) 
+SELECT 
+  flag_churn_after_trial, 
+  COUNT(*) AS churn_after_trial_number, 
+  ROUND(COUNT(*) / SUM(COUNT(*)) OVER(), 2) AS churn_after_trail_percentage
+FROM cte_flag_churn_after_trial
+GROUP BY 1; 
+```
+
+![q2_5](img/q2_5.png)
+
+## **Q6**
+
+> What is the number and percentage of customer plans after their initial free trial?
+
+```sql
+WITH cte_previous_plan AS (
+  SELECT 
+    *, 
+    LAG(plan_id) OVER(
+      PARTITION BY customer_id
+      ORDER BY start_date) AS previous_plan 
+  FROM v_foodie_fi.subscriptions
+)
+SELECT 
+  plan_id, 
+  COUNT(*) AS customer_count,
+  ROUND(COUNT(*) / SUM(COUNT(*)) OVER(), 2) AS percentage
+FROM cte_previous_plan 
+WHERE previous_plan = 0
+GROUP BY plan_id;
+```
+
+![q2_6](img/q2_6.png)
+
+## **Q7**
+
+> What is the customer count and percentage breakdown of all 5 plan_name values at 2020-12-31?
+
+```sql
+WITH cte_breakdown_2020 AS (
+  SELECT 
+    customer_id, 
+    plan_id, 
+    start_date, 
+    ROW_NUMBER() OVER(
+      PARTITION BY customer_id
+      ORDER BY start_date DESC
+    ) AS _row_number
+  FROM v_foodie_fi.subscriptions
+  WHERE start_date <= '2020-12-31'
+)
+SELECT 
+  cte_breakdown_2020.plan_id, 
+  plans.plan_name, 
+  COUNT(*) AS customer_count, 
+  ROUND(100 * COUNT(*) / SUM(COUNT(*)) OVER(), 1) AS percentage
+FROM cte_breakdown_2020
+LEFT JOIN v_foodie_fi.plans
+  ON cte_breakdown_2020.plan_id = plans.plan_id
+WHERE _row_number = 1
+GROUP BY 1, 2;
+```
+![q2_7](img/q2_7.png)
+
+## **Q8**
+
+> How many customers have upgraded to an annual plan in 2020?
+
+```sql
+SELECT 
+  COUNT(DISTINCT customer_id) AS customer_count
+FROM v_foodie_fi.subscriptions
+WHERE plan_id = 3
+AND start_date BETWEEN '2020-01-01' AND '2020-12-31';
+```
+
+**COUNT : 195**
+
