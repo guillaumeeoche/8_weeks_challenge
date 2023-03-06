@@ -23,7 +23,7 @@ The `plans` table is composed of :
 - **plan_name** - Name of the plan or subscription
 - **price** - Monthly price of the subscription
 
-![plans_table](img/plans_table.png)
+![plans_table](img/plans_table.PNG)
 
 ## TABLE 2 : Subscriptions 
 
@@ -32,7 +32,7 @@ The `subscriptions` table is composed of :
 - **plan_id** - FOREIGN KEY
 - **start_date** - Starting date of the subscription
 
-![subscriptions_table](img/subscriptions_table.png)
+![subscriptions_table](img/subscriptions_table.PNG)
 
 # CASE STUDY 
 
@@ -70,7 +70,7 @@ INNER JOIN v_foodie_fi.plans
 WHERE customer_id in (1, 2, 11, 13, 15, 16, 18, 19);
 ```
 
-![q1_1](img/q1_1.png)
+![q1_1](img/q1_1.PNG)
 
 - **CUSTOMER 1**
 Trial of 7 days then basic monthly subscription 
@@ -100,7 +100,7 @@ SELECT
   COUNT(DISTINCT customer_id) AS customers_number
 FROM v_foodie_fi.subscriptions;
 ```
-![q2_1](img/q2_1.png)
+![q2_1](img/q2_1.PNG)
 
 ## **Q2**
 
@@ -122,7 +122,7 @@ GROUP BY 1
 ORDER BY 2 DESC; 
 ```
 
-![q2_2](img/q2_2.png)
+![q2_2](img/q2_2.PNG)
 
 ## **Q3**
 
@@ -141,7 +141,7 @@ GROUP BY 1, 2
 ORDER BY 1; 
 ```
 
-![q2_2](img/q2_3.png)
+![q2_2](img/q2_3.PNG)
 
 ## **Q4**
 
@@ -168,7 +168,7 @@ FROM cte_flag_churn
 GROUP BY 1;
 ```
 
-![q2_4](img/q2_4.png)
+![q2_4](img/q2_4.PNG)
 
 ## **Q5**
 
@@ -200,7 +200,7 @@ FROM cte_flag_churn_after_trial
 GROUP BY 1; 
 ```
 
-![q2_5](img/q2_5.png)
+![q2_5](img/q2_5.PNG)
 
 ## **Q6**
 
@@ -224,7 +224,7 @@ WHERE previous_plan = 0
 GROUP BY plan_id;
 ```
 
-![q2_6](img/q2_6.png)
+![q2_6](img/q2_6.PNG)
 
 ## **Q7**
 
@@ -254,7 +254,7 @@ LEFT JOIN v_foodie_fi.plans
 WHERE _row_number = 1
 GROUP BY 1, 2;
 ```
-![q2_7](img/q2_7.png)
+![q2_7](img/q2_7.PNG)
 
 ## **Q8**
 
