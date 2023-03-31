@@ -270,3 +270,95 @@ AND start_date BETWEEN '2020-01-01' AND '2020-12-31';
 
 **COUNT : 195**
 
+## **Q9**
+
+> How many days on average does it take for a customer to an annual plan from the day they join Foodie-Fi?
+
+```sql
+DROP TABLE IF EXISTS join_date; 
+CREATE TEMP TABLE join_date AS (
+  WITH cte_join_date AS (
+    SELECT 
+      *, 
+      ROW_NUMBER() OVER(
+        PARTITION BY customer_id
+        ORDER BY start_date
+      ) AS _row_number
+    FROM foodie_fi.subscriptions
+  )
+  SELECT 
+    customer_id, 
+    start_date AS signup_date
+  FROM cte_join_date 
+  WHERE _row_number = 1
+);
+
+
+DROP TABLE IF EXISTS date_to_annual_plan; 
+CREATE TEMP TABLE date_to_annual_plan AS (
+  WITH cte_date_to_annual_plan AS (
+    SELECT 
+      *, 
+      ROW_NUMBER() OVER(
+        PARTITION BY customer_id
+        ORDER BY start_date DESC 
+      ) AS _row_number
+    FROM foodie_fi.subscriptions
+  )
+  SELECT 
+    customer_id, 
+    start_date AS annual_plan_date
+  FROM cte_date_to_annual_plan
+  WHERE _row_number = 1
+  AND plan_id = 3
+); 
+
+
+WITH cte_days_diff_until_annual_plan AS (
+  SELECT 
+   date_to_annual_plan.customer_id, 
+   join_date.signup_date, 
+   annual_plan_date
+  FROM date_to_annual_plan
+  LEFT JOIN join_date
+    ON date_to_annual_plan.customer_id = join_date.customer_id
+), 
+cte_avg_diff_days AS (
+  SELECT 
+    customer_id, 
+    DATE_PART('day', annual_plan_date::timestamp - signup_date::timestamp) AS days_diff
+  FROM cte_days_diff_until_annual_plan
+)
+SELECT 
+  FLOOR(AVG(days_diff)) AS avg_diff_days
+FROM cte_avg_diff_days;
+```
+
+**AVG : 105**
+
+## **Q10**
+
+> How many customers downgraded from a pro monthly to a basic monthly plan in 2020?
+
+```sql
+WITH cte_previous_plan AS (
+  SELECT 
+    customer_id, 
+    plan_id, 
+    LAG(plan_id) OVER(
+      PARTITION BY customer_id
+      ORDER BY start_date DESC
+    ) AS previous_plan, 
+    start_date
+  FROM foodie_fi.subscriptions
+  WHERE start_date <= '2020-12-31'
+)
+SELECT 
+  COUNT(*)
+FROM cte_previous_plan
+WHERE previous_plan = 2
+AND plan_id = 1;
+```
+
+**COUNT : 163**
+
