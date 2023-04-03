@@ -252,3 +252,182 @@ SELECT
 FROM cte_previous_plan
 WHERE previous_plan = 2
 AND plan_id = 1;
+
+/*
+The Foodie-Fi team wants you to create a new payments table for the year 2020 that includes amounts paid by each customer in the subscriptions table with the following requirements:
+
+- monthly payments always occur on the same day of month as the original start_date of any monthly paid plan
+- upgrades from basic to monthly or pro plans are reduced by the current paid amount in that month and start immediately
+- upgrades from pro monthly to pro annual are paid at the end of the current billing period and also starts at the end of the month period
+- once a customer churns they will no longer make payments
+*/
+
+
+DROP TABLE IF EXISTS sub_next_plan; 
+CREATE TEMP TABLE sub_next_plan AS (
+  SELECT
+   customer_id,
+   plan_id, 
+   start_date, 
+   LEAD(subscriptions.plan_id) OVER W AS next_plan, 
+   LEAD(start_date) OVER w AS next_date
+  FROM foodie_fi.subscriptions
+  WHERE plan_id != 0
+  AND start_date <= '2020-12-31'
+  WINDOW w AS (
+    PARTITION BY customer_id
+    ORDER BY start_date
+  )
+); 
+
+
+/*
+SELECT 
+  plan_id, 
+  next_plan,
+  COUNT(*)
+FROM sub_next_plan
+GROUP BY 1, 2
+ORDER BY 1, 2;
+*/
+
+DROP TABLE IF EXISTS case_1_2; 
+CREATE TEMP TABLE case_1_2 AS (
+  WITH cte_plan_1_2 AS (
+    SELECT 
+      customer_id, 
+      plan_id, 
+      start_date 
+    FROM sub_next_plan
+    WHERE plan_id in (1, 2)
+    AND next_plan IS NULL
+  )
+  SELECT
+    customer_id, 
+    plan_id, 
+    GENERATE_SERIES(start_date, '2020-12-31', '1 month'::interval) AS payment_date
+  FROM cte_plan_1_2
+);
+
+
+DROP TABLE IF EXISTS case_1_to_2; 
+CREATE TEMP TABLE case_1_to_2 AS (
+  WITH cte_plan_1_to_2 AS (
+    SELECT
+      customer_id,
+      plan_id, 
+      start_date, 
+      next_date
+    FROM sub_next_plan
+    WHERE plan_id = 1
+    AND next_plan IN (2, 3)
+  )
+  SELECT
+    customer_id, 
+    plan_id, 
+    GENERATE_SERIES(start_date, next_date, '1 month'::interval) AS payment_date
+  FROM cte_plan_1_to_2
+);
+
+
+DROP TABLE IF EXISTS case_1_2_to_4; 
+CREATE TEMP TABLE case_1_2_to_4 AS (
+  WITH cte_plan_1_to_4 AS (
+    SELECT
+      customer_id,
+      plan_id, 
+      start_date, 
+      next_date
+    FROM sub_next_plan
+    WHERE plan_id in (1, 2)
+    AND next_plan = 4
+  )
+  SELECT
+    customer_id, 
+    plan_id, 
+    GENERATE_SERIES(start_date, next_date - interval '1 month', '1 month'::interval) AS payment_date
+  FROM cte_plan_1_to_4
+);
+
+
+DROP TABLE IF EXISTS case_2_to_3; 
+CREATE TEMP TABLE case_2_to_3 AS (
+  WITH cte_plan_2_to_3 AS (
+    SELECT
+      customer_id,
+      plan_id, 
+      start_date, 
+      next_date
+    FROM sub_next_plan
+    WHERE plan_id = 2
+    AND next_plan = 3
+  )
+  SELECT
+    customer_id, 
+    plan_id, 
+    GENERATE_SERIES(start_date, next_date - interval '1 month', '1 month'::interval) AS payment_date
+  FROM cte_plan_2_to_3
+);
+
+
+DROP TABLE IF EXISTS payment_log;
+CREATE TEMP TABLE payment_log AS (
+  SELECT *
+  FROM case_1_2
+  UNION ALL 
+  SELECT *
+  FROM case_1_to_2
+  UNION ALL 
+  SELECT *
+  FROM case_1_2_to_4
+  UNION ALL 
+  SELECT * 
+  FROM case_2_to_3
+  UNION ALL
+  SELECT 
+    customer_id, 
+    plan_id, 
+    start_date AS payment_date
+  FROM sub_next_plan 
+  WHERE plan_id = 3
+  AND next_plan IS NULL
+  UNION ALL 
+  SELECT 
+    customer_id, 
+    plan_id, 
+    start_date AS payment_date
+  FROM sub_next_plan 
+  WHERE plan_id = 2
+  AND next_plan = 4
+);
+
+
+WITH cte_payment_log AS (
+  SELECT 
+    customer_id, 
+    payment_log.plan_id, 
+    plans.plan_name, 
+    payment_date, 
+    plans.price AS amount, 
+    ROW_NUMBER() OVER w AS payment_order, 
+    LAG(payment_log.plan_id) OVER w AS previous_plan, 
+    LAG(plans.price) OVER w AS previous_price
+  FROM payment_log 
+  INNER JOIN foodie_fi.plans
+    ON payment_log.plan_id = plans.plan_id
+  WINDOW w AS (
+    PARTITION BY customer_id
+    ORDER BY payment_date
+  )
+)
+SELECT 
+  customer_id, 
+  plan_id, 
+  plan_name, 
+  payment_date, 
+  CASE 
+    WHEN plan_id IN (2, 3) AND previous_plan = 1 THEN amount - previous_price
+    ELSE amount
+  END AS amount, 
+  payment_order
+FROM cte_payment_log;
