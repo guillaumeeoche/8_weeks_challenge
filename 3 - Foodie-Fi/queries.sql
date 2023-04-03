@@ -345,7 +345,7 @@ CREATE TEMP TABLE case_1_2_to_4 AS (
   SELECT
     customer_id, 
     plan_id, 
-    GENERATE_SERIES(start_date, next_date - interval '1 month', '1 month'::interval) AS payment_date
+    GENERATE_SERIES(start_date, next_date, '1 month'::interval) AS payment_date
   FROM cte_plan_1_to_4
 );
 
@@ -391,14 +391,6 @@ CREATE TEMP TABLE payment_log AS (
   FROM sub_next_plan 
   WHERE plan_id = 3
   AND next_plan IS NULL
-  UNION ALL 
-  SELECT 
-    customer_id, 
-    plan_id, 
-    start_date AS payment_date
-  FROM sub_next_plan 
-  WHERE plan_id = 2
-  AND next_plan = 4
 );
 
 
@@ -430,4 +422,4 @@ SELECT
     ELSE amount
   END AS amount, 
   payment_order
-FROM cte_payment_log;
+FROM cte_payment_log; 
