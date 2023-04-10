@@ -533,3 +533,71 @@ SELECT
   payment_order
 FROM cte_payment_log; 
 ```
+
+# Outside The Box 
+
+## **Q1**
+
+> How would you calculate the rate of growth for Foodie-Fi?
+
+To check the rate of growth, we have to calculate the decrease/increase percentage between the previous and actual value. In this case, we can take the sum of the subscription amount by month. 
+
+```sql
+WITH cte_rate_growth AS (
+  SELECT 
+    customer_id, 
+    plan_id, 
+    plan_name, 
+    amount, 
+    DATE_PART('month', payment_date) AS month, 
+    payment_order
+  FROM log_payments
+), 
+cte_total_amount_by_month AS (
+  SELECT 
+    month,
+    SUM(amount) AS total_amount_by_month
+  FROM cte_rate_growth 
+  GROUP BY month
+  ORDER BY month
+), 
+cte_previous_ca AS (
+  SELECT 
+    month, 
+    total_amount_by_month, 
+    LAG(total_amount_by_month) OVER(
+      ORDER BY month
+    ) AS previous_total_amount
+  FROM cte_total_amount_by_month
+)
+SELECT 
+  month, 
+  total_amount_by_month, 
+  previous_total_amount, 
+  ROUND(
+    100 * (total_amount_by_month-previous_total_amount)/previous_total_amount, 
+    2
+  ) AS growth_rate
+FROM cte_previous_ca;
+```
+![q3_1](img/q3_1.PNG)
+
+As we can see, there is a increase trend. This trend is faster at the beginning of the year and then slower. We have the annual subscription so we have to take this information in our analysis. 
+
+![q3_1_1](img/q3_1_1.PNG)
+
+The trend is the same without annual subscription. 
+
+## **Q2**
+
+> What key metrics would you recommend Foodie-Fi management to track over time to assess performance of their overall business?
+
+- Total amount of subscription by month (quantity, price)
+- Percentage of churn (to understand why) 
+- Percentage of trial without subscription after
+- Percentage of annual/monthly growth 
+
+## **Q3**
+
+> What are some key customer journeys or experiences that you would analyse further to improve customer retention?
+

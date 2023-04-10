@@ -423,3 +423,44 @@ SELECT
   END AS amount, 
   payment_order
 FROM cte_payment_log; 
+
+--Out of the box
+--How would you calculate the rate of growth for Foodie-Fi?
+
+  SELECT 
+    customer_id, 
+    plan_id, 
+    plan_name, 
+    amount, 
+    DATE_PART('month', payment_date) AS month, 
+    payment_order
+  FROM log_payments
+), 
+cte_total_amount_by_month AS (
+  SELECT 
+    month,
+    SUM(amount) AS total_amount_by_month
+  FROM cte_rate_growth 
+  GROUP BY month
+  ORDER BY month
+), 
+cte_previous_ca AS (
+  SELECT 
+    month, 
+    total_amount_by_month, 
+    LAG(total_amount_by_month) OVER(
+      ORDER BY month
+    ) AS previous_total_amount
+  FROM cte_total_amount_by_month
+)
+SELECT 
+  month, 
+  total_amount_by_month, 
+  previous_total_amount, 
+  ROUND(
+    100 * (total_amount_by_month-previous_total_amount)/previous_total_amount, 
+    2
+  ) AS growth_rate
+FROM cte_previous_ca;
+
+
