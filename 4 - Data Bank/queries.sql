@@ -85,3 +85,16 @@ cte_nodes_duration AS (
 SELECT 
   ROUND(AVG(node_duration)) AS avg_node_duration
 FROM cte_nodes_duration;
+
+--What is the median, 80th and 95th percentile for this same reallocation days metric for each region? 
+
+SELECT
+  t2.region_name,
+  PERCENTILE_CONT(0.50) WITHIN GROUP(ORDER BY node_duration) AS median,
+  PERCENTILE_CONT(0.80) WITHIN GROUP(ORDER BY node_duration) AS perc_80,
+  ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP(ORDER BY node_duration)) AS perc_95
+FROM nodes_duration AS t1
+INNER JOIN data_bank.regions AS t2
+  ON t1.region_id = t2.region_id
+GROUP BY t2.region_name
+ORDER BY 1;
