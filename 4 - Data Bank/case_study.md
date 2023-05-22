@@ -196,3 +196,76 @@ ORDER BY 1;
 ![q1_5](img/q1_5.PNG)
 
 ## Customer Transactions 
+
+## **Q1**
+
+> What is the unique count and total amount for each transaction type?
+
+```sql
+SELECT 
+  txn_type, 
+  COUNT(DISTINCT txn_amount) AS unique_nbr_type, 
+  SUM(txn_amount) AS total_transaction
+FROM data_bank.customer_transactions
+GROUP BY 1; 
+```
+![q2_1](img/q2_1.PNG)
+
+## **Q2**
+
+> What is the average total historical deposit counts and amounts for all customers?
+
+```sql 
+WITH cte_customer AS(
+  SELECT 
+    customer_id, 
+    COUNT(*) AS deposit_count, 
+    SUM(txn_amount) AS deposit_amount 
+  FROM data_bank.customer_transactions
+  WHERE txn_type = 'deposit'
+  GROUP BY 1
+)
+SELECT
+  ROUND(AVG(deposit_count)) AS avg_deposit_count, 
+  ROUND(AVG(deposit_amount)/AVG(deposit_count)) AS avg_deposit_amount 
+FROM cte_customer; 
+```
+![q2_2](img/q2_2.PNG)
+
+## **Q3**
+
+> For each month - how many Data Bank customers make more than 1 deposit and either 1 purchase or 1 withdrawal in a single month?
+
+```sql
+WITH cte_txn_number AS(
+  SELECT 
+    customer_id,
+    SUM(CASE WHEN txn_type = 'deposit' THEN 1 ELSE 0 END) AS deposit_count, 
+    SUM(CASE WHEN txn_type = 'withdrawal' THEN 1 ELSE 0 END) AS withdrawal_count, 
+    SUM(CASE WHEN txn_type = 'purchase' THEN 1 ELSE 0 END) AS purchase_count, 
+    DATE_PART('month', txn_date) AS month
+  FROM data_bank.customer_transactions
+  GROUP BY customer_id, month
+)
+SELECT 
+  CASE 
+    WHEN month = 1 THEN 'January'
+    WHEN month = 2 THEN 'February'
+    WHEN month = 3 THEN 'March'
+    ELSE 'April'
+  END AS month,
+  COUNT(DISTINCT customer_id) AS customer_number
+FROM cte_txn_number
+WHERE deposit_count > 1 AND (
+  withdrawal_count >= 1 OR purchase_count >= 1
+)
+GROUP BY month
+ORDER BY customer_number DESC; 
+```
+
+![q2_3](img/q2_3.PNG)
+
+## **Q4**
+
+> What is the closing balance for each customer at the end of the month?
+
