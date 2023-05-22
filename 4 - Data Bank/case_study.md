@@ -339,3 +339,4 @@ CREATE TEMP TABLE customer_actual_balance AS (
 
 SELECT * FROM customer_actual_balance;
 ```
+![q2_4](img/q2_4.PNG)

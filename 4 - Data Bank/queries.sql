@@ -98,3 +98,131 @@ INNER JOIN data_bank.regions AS t2
   ON t1.region_id = t2.region_id
 GROUP BY t2.region_name
 ORDER BY 1;
+
+/*
+Customer Transactions
+*/
+
+--What is the unique count and total amount for each transaction type?
+
+SELECT 
+  txn_type, 
+  COUNT(DISTINCT txn_amount) AS unique_nbr_type, 
+  SUM(txn_amount) AS total_transaction
+FROM data_bank.customer_transactions
+GROUP BY 1; 
+
+--What is the average total historical deposit counts and amounts for all customers?
+
+WITH cte_customer AS(
+  SELECT 
+    customer_id, 
+    COUNT(*) AS deposit_count, 
+    SUM(txn_amount) AS deposit_amount 
+  FROM data_bank.customer_transactions
+  WHERE txn_type = 'deposit'
+  GROUP BY 1
+)
+SELECT
+  ROUND(AVG(deposit_count)) AS avg_deposit_count, 
+  ROUND(AVG(deposit_amount)/AVG(deposit_count)) AS avg_deposit_amount 
+FROM cte_customer; 
+
+--For each month - how many Data Bank customers make more than 1 deposit and either 1 purchase or 1 withdrawal in a single month?
+
+WITH cte_txn_number AS(
+  SELECT 
+    customer_id,
+    SUM(CASE WHEN txn_type = 'deposit' THEN 1 ELSE 0 END) AS deposit_count, 
+    SUM(CASE WHEN txn_type = 'withdrawal' THEN 1 ELSE 0 END) AS withdrawal_count, 
+    SUM(CASE WHEN txn_type = 'purchase' THEN 1 ELSE 0 END) AS purchase_count, 
+    DATE_PART('month', txn_date) AS month
+  FROM data_bank.customer_transactions
+  GROUP BY customer_id, month
+)
+SELECT 
+  CASE 
+    WHEN month = 1 THEN 'January'
+    WHEN month = 2 THEN 'February'
+    WHEN month = 3 THEN 'March'
+    ELSE 'April'
+  END AS month,
+  COUNT(DISTINCT customer_id) AS customer_number
+FROM cte_txn_number
+WHERE deposit_count > 1 AND (
+  withdrawal_count >= 1 OR purchase_count >= 1
+)
+GROUP BY month
+ORDER BY customer_number DESC; 
+
+--What is the closing balance for each customer at the end of the month?
+
+DROP TABLE IF EXISTS customer_balance; 
+CREATE TEMP TABLE customer_balance AS (
+  SELECT 
+    customer_id, 
+    txn_date,
+    txn_type, 
+    CASE 
+      WHEN txn_type = 'deposit' THEN txn_amount
+      ELSE -txn_amount
+    END AS txn_amount,
+    ROW_NUMBER() OVER(
+      PARTITION BY customer_id
+      ORDER BY txn_date
+    ) AS _row_number
+  FROM data_bank.customer_transactions
+); 
+
+DROP TABLE IF EXISTS customer_actual_balance;
+CREATE TEMP TABLE customer_actual_balance AS (
+ WITH RECURSIVE output_table AS (
+  SELECT 
+    customer_id, 
+    txn_date,
+    txn_amount,
+    txn_amount AS balance,
+    _row_number
+  FROM customer_balance 
+  WHERE _row_number = 1 
+
+  UNION ALL 
+  
+    SELECT 
+    t1.customer_id, 
+    t2.txn_date, 
+    t2.txn_amount,
+    t1.balance + t2.txn_amount AS balance, 
+    t2._row_number
+  FROM output_table AS t1
+  INNER JOIN customer_balance AS t2
+    ON t1._row_number + 1 = t2._row_number
+    AND t1.customer_id = t2.customer_id 
+    AND t2._row_number > 1
+  ), 
+  cte_balance AS (
+    SELECT 
+    customer_id, 
+    txn_date,
+    DATE_PART('month', txn_date) AS month, 
+    SUM(txn_amount) AS balance_contribution, 
+    MAX(balance) AS balance
+  FROM output_table
+  GROUP BY customer_id, txn_date
+  )
+  SELECT 
+    customer_id, 
+    txn_date, 
+    month, 
+    balance_contribution, 
+    balance, 
+    ROW_NUMBER() OVER( 
+      PARTITION BY month, customer_id
+      ORDER BY txn_date
+    ) AS rn
+  FROM cte_balance
+  ORDER BY customer_id, txn_date
+);
+
+SELECT * FROM customer_actual_balance;
+
