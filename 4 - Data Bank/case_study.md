@@ -269,3 +269,73 @@ ORDER BY customer_number DESC;
 
 > What is the closing balance for each customer at the end of the month?
 
+```sql
+DROP TABLE IF EXISTS customer_balance; 
+CREATE TEMP TABLE customer_balance AS (
+  SELECT 
+    customer_id, 
+    txn_date,
+    txn_type, 
+    CASE 
+      WHEN txn_type = 'deposit' THEN txn_amount
+      ELSE -txn_amount
+    END AS txn_amount,
+    ROW_NUMBER() OVER(
+      PARTITION BY customer_id
+      ORDER BY txn_date
+    ) AS _row_number
+  FROM data_bank.customer_transactions
+); 
+
+DROP TABLE IF EXISTS customer_actual_balance;
+CREATE TEMP TABLE customer_actual_balance AS (
+ WITH RECURSIVE output_table AS (
+  SELECT 
+    customer_id, 
+    txn_date,
+    txn_amount,
+    txn_amount AS balance,
+    _row_number
+  FROM customer_balance 
+  WHERE _row_number = 1 
+
+  UNION ALL 
+  
+    SELECT 
+    t1.customer_id, 
+    t2.txn_date, 
+    t2.txn_amount,
+    t1.balance + t2.txn_amount AS balance, 
+    t2._row_number
+  FROM output_table AS t1
+  INNER JOIN customer_balance AS t2
+    ON t1._row_number + 1 = t2._row_number
+    AND t1.customer_id = t2.customer_id 
+    AND t2._row_number > 1
+  ), 
+  cte_balance AS (
+    SELECT 
+    customer_id, 
+    txn_date,
+    DATE_PART('month', txn_date) AS month, 
+    SUM(txn_amount) AS balance_contribution, 
+    MAX(balance) AS balance
+  FROM output_table
+  GROUP BY customer_id, txn_date
+  )
+  SELECT 
+    customer_id, 
+    txn_date, 
+    month, 
+    balance_contribution, 
+    balance, 
+    ROW_NUMBER() OVER( 
+      PARTITION BY month, customer_id
+      ORDER BY txn_date
+    ) AS rn
+  FROM cte_balance
+  ORDER BY customer_id, txn_date
+);
+
+SELECT * FROM customer_actual_balance;
+```
