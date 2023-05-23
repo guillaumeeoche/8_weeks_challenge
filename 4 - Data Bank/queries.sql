@@ -226,3 +226,149 @@ CREATE TEMP TABLE customer_actual_balance AS (
 
 SELECT * FROM customer_actual_balance;
 
+--Comparing the closing balance of a customer’s first month and the closing balance from their second nth, what percentage of customers
+
+DROP TABLE IF EXISTS first_months_balance; 
+CREATE TEMP TABLE first_months_balance AS (
+WITH cte_first_months AS (
+  SELECT 
+    customer_id, 
+    txn_date,
+    month, 
+    balance_contribution, 
+    balance, 
+    ROW_NUMBER() OVER(
+      PARTITION BY customer_id, month 
+      ORDER BY txn_date DESC
+    ) AS rn_date
+  FROM customer_actual_balance
+  WHERE rn <= 2
+)
+SELECT 
+  customer_id, 
+  month, 
+  txn_date, 
+  balance
+FROM cte_first_months 
+WHERE rn_date = 1
+); 
+
+SELECT * FROM first_months_balance; 
+
+--Have a negative or positive first month balance?
+
+WITH cte_balance_analysis AS (
+SELECT 
+  customer_id, 
+  month, 
+  balance, 
+  ROw_NUMBER() OVER(
+    PARTITION BY customer_id
+    ORDER BY month
+  ) AS rn
+FROM first_months_balance
+), 
+negative_balance AS (
+  SELECT 
+    customer_id, 
+    month, 
+    balance, 
+    CASE 
+      WHEN balance < 0 THEN 1 
+      ELSE 0
+    END AS negative_flag
+  FROM cte_balance_analysis 
+  WHERE rn = 1
+)
+SELECT 
+  CASE 
+    WHEN negative_flag = 1 THEN 'Negative numbers'
+    ELSE 'Positive numbers'
+  END AS negative_flag, 
+  COUNT(negative_flag) AS neg_or_not_count, 
+  ROUND(
+    COUNT(negative_flag)/SUM(COUNT(negative_flag)) OVER(), 
+    2
+  ) AS neg_or_not_percentage
+FROM negative_balance
+GROUP BY 1;
+
+/*
+- Increase their opening month’s positive closing balance by more than 5% in the following month?
+- Reduce their opening month’s positive closing balance by more than 5% in the following month?
+- Move from a positive balance in the first month to a negative balance in the second month?
+*/
+
+cte_generated_months AS (
+  SELECT
+    customer_id,
+    (
+      DATE_TRUNC('mon', MIN(txn_date))::DATE +
+      GENERATE_SERIES(0, 1) * INTERVAL '1 MONTH'
+    )::DATE AS month,
+    GENERATE_SERIES(1, 2) AS month_number
+  FROM data_bank.customer_transactions
+  GROUP BY customer_id
+),
+cte_monthly_transactions AS (
+  SELECT
+    cte_generated_months.customer_id,
+    cte_generated_months.month,
+    cte_generated_months.month_number,
+    cte_monthly_balances.balance AS transaction_amount
+  FROM cte_generated_months
+  LEFT JOIN cte_monthly_balances
+    ON cte_generated_months.month = cte_monthly_balances.month
+    AND cte_generated_months.customer_id = cte_monthly_balances.customer_id
+),
+cte_monthly_aggregates AS (
+  SELECT
+    customer_id,
+    month_number,
+    LAG(transaction_amount) OVER (
+      PARTITION BY customer_id
+      ORDER BY month
+    ) AS previous_month_transaction_amount,
+    transaction_amount
+  FROM cte_monthly_transactions
+),
+cte_calculations AS (
+  SELECT
+    COUNT(DISTINCT customer_id) AS customer_count,
+    SUM(CASE WHEN previous_month_transaction_amount > 0 THEN 1 ELSE 0 END) AS positive_first_month,
+    SUM(CASE WHEN previous_month_transaction_amount < 0 THEN 1 ELSE 0 END) AS negative_first_month,
+    SUM(CASE
+          WHEN previous_month_transaction_amount > 0
+            AND transaction_amount > 0
+            AND transaction_amount > 0.05 * previous_month_transaction_amount
+            THEN 1
+          ELSE 0
+        END
+    ) AS increase_count,
+    SUM(
+      CASE
+        WHEN previous_month_transaction_amount > 0
+          AND transaction_amount < 0
+          AND transaction_amount < -0.05 * previous_month_transaction_amount
+          THEN 1
+        ELSE 0
+      END
+    ) AS decrease_count,
+    SUM(
+      CASE
+        WHEN previous_month_transaction_amount > 0
+          AND transaction_amount < 0
+          AND transaction_amount < -previous_month_transaction_amount
+            THEN 1
+        ELSE 0 END
+    ) AS negative_count
+  FROM cte_monthly_aggregates
+  WHERE previous_month_transaction_amount IS NOT NULL
+)
+SELECT
+  ROUND(100 * positive_first_month / customer_count, 2) AS positive_pc,
+  ROUND(100 * negative_first_month / customer_count, 2) AS negative_pc,
+  ROUND(100 * increase_count / positive_first_month, 2) AS increase_pc,
+  ROUND(100 * decrease_count / positive_first_month, 2) AS decrease_pc,
+  ROUND(100 * negative_count / positive_first_month, 2) AS negative_balance_pc
+FROM cte_calculations;
