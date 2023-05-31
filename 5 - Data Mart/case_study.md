@@ -142,4 +142,116 @@ ORDER BY 2 DESC;
 
 > What is the total sales for each region for each month?
 
+```sql
+SELECT 
+  region, 
+  month_number, 
+  SUM(sales) AS total_sales
+FROM `data_mart.clean_weekly_sales`
+GROUP BY 
+  region, 
+  month_number
+ORDER BY
+  region, 
+  month_number;
+```
+![total_sales_by_region_month](img/total_sales_by_region_month.PNG)
+
+## **Q5**
+
+> What is the total count of transactions for each platform
+
+```sql
+SELECT 
+  plateform, 
+  SUM(transactions) AS transactions_number
+FROM data_mart.clean_weekly_sales 
+GROUP BY 
+  plateform; 
+```
+![transactions_number_by_plateforme](img/transactions_number_by_plateforme.PNG)
+
+## **Q6**
+
+> What is the percentage of sales for Retail vs Shopify for each month?
+
+```sql
+WITH cte_total_sales AS (
+  SELECT
+    calendar_year,
+    month_number, 
+    plateform, 
+    SUM(sales) AS monthly_sales 
+FROM data_mart.clean_weekly_sales 
+GROUP BY 
+  calendar_year, 
+  month_number, 
+  plateform 
+)
+SELECT 
+  calendar_year, 
+  month_number, 
+  ROUND(
+    100 * MAX(CASE WHEN plateform = "Retail" THEN monthly_sales ELSE NULL END) / 
+    SUM(monthly_sales), 
+    2
+   ) AS retail_sales, 
+  ROUND(
+    100 * MAX(CASE WHEN plateform = "Shopify" THEN monthly_sales ELSE NULL END) / 
+    SUM(monthly_sales),
+    2
+  ) AS shopify_sales
+FROM cte_total_sales 
+GROUP BY 
+  calendar_year, 
+  month_number
+ORDER BY 
+  calendar_year, 
+  month_number;
+```
+![plateform_sales_by_month_year](img/plateform_sales_by_month_year.PNG)
+
+## **Q7**
+
+> What is the percentage of sales by demographic for each year in the dataset?
+
+```sql
+WITH cte_total_sales AS (
+  SELECT
+    calendar_year,
+    demographic, 
+    SUM(sales) AS yearly_sales
+FROM data_mart.clean_weekly_sales 
+GROUP BY 
+  calendar_year, 
+  demographic
+)
+SELECT 
+  calendar_year, 
+  ROUND(
+    100 * MAX(CASE WHEN demographic = "Couples" THEN yearly_sales ELSE NULL END) / 
+    SUM(yearly_sales), 
+    2
+   ) AS couples_sales, 
+  ROUND(
+    100 * MAX(CASE WHEN demographic = "Families" THEN yearly_sales ELSE NULL END) / 
+    SUM(yearly_sales),
+    2
+  ) AS families_sales, 
+  ROUND(
+    100 * MAX(CASE WHEN demographic = "unknown" THEN yearly_sales ELSE NULL END) / 
+    SUM(yearly_sales),
+    2
+  ) AS unknown_sales
+FROM cte_total_sales 
+GROUP BY 
+  calendar_year
+ORDER BY 
+  calendar_year; 
+```
+![sales_demographic_by_year](img/demographic_by_year.PNG)
+
+## **Q8**
+
+> Which age_band and demographic values contribute the most to Retail sales?
 
