@@ -26,7 +26,7 @@ The `weekly_sales` table is composed of :
 - Customer `segment` and `customer_type` data relates to personal age and demographics information that is shared with Data Mart
 - `transactions` is the count of unique purchases made through Data Mart and sales is the actual dollar amount of purchases
 
-![weekly_sales_table](img/weekly_sales_table.PNG)
+![weekly_sales_table](img/weekly_sales_table.png)
 
 # CASE STUDY 
 
@@ -136,7 +136,7 @@ FROM data_mart.clean_weekly_sales
 GROUP BY calendar_year
 ORDER BY 2 DESC; 
  ```
-![transactions_by_year](img/transactions_by_year.PNG)
+![transactions_by_year](img/transactions_by_year.png)
 
 ## **Q4**
 
@@ -155,7 +155,7 @@ ORDER BY
   region, 
   month_number;
 ```
-![total_sales_by_region_month](img/total_sales_by_region_month.PNG)
+![total_sales_by_region_month](img/total_sales_by_region_month.png)
 
 ## **Q5**
 
@@ -169,7 +169,7 @@ FROM data_mart.clean_weekly_sales
 GROUP BY 
   plateform; 
 ```
-![transactions_number_by_plateforme](img/transactions_number_by_plateforme.PNG)
+![transactions_number_by_plateforme](img/transactions_number_by_plateforme.png)
 
 ## **Q6**
 
@@ -209,7 +209,7 @@ ORDER BY
   calendar_year, 
   month_number;
 ```
-![plateform_sales_by_month_year](img/plateform_sales_by_month_year.PNG)
+![plateform_sales_by_month_year](img/plateform_sales_by_month_year.png)
 
 ## **Q7**
 
@@ -249,7 +249,7 @@ GROUP BY
 ORDER BY 
   calendar_year; 
 ```
-![sales_demographic_by_year](img/demographic_by_year.PNG)
+![sales_demographic_by_year](img/demographic_by_year.png)
 
 ## **Q8**
 
@@ -357,7 +357,7 @@ FROM cte_avg_transac_by_year_plateform
 ORDER BY calendar_year;
 ```
 
-![avg_transaction](img/avg_transaction.PNG)
+![avg_transaction](img/avg_transaction.png)
 
 # Before & After Analysis 
 
@@ -450,7 +450,7 @@ SELECT
 FROM cte_diff_bw_after_before
 WHERE event_state = "after";
 ```
-![4_weeks_after_before](img/4_weeks_after_before.PNG)
+![4_weeks_after_before](img/4_weeks_after_before.png)
 
 We can filter 12 weeks before. 
 
@@ -471,4 +471,4 @@ WITH cte_total_sales_4_weeks AS (
   WHERE _row_number <= 12
 )
 ```
-![12_weeks_after_before](img/12_weeks_after_before.PNG)
+![12_weeks_after_before](img/12_weeks_after_before.png)
