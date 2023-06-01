@@ -255,3 +255,107 @@ ORDER BY
 
 > Which age_band and demographic values contribute the most to Retail sales?
 
+```sql
+WITH cte_total_sales AS (
+  SELECT
+    plateform,
+    demographic, 
+    SUM(sales) AS total_sales
+FROM data_mart.clean_weekly_sales 
+GROUP BY 
+  plateform,
+  demographic
+)
+SELECT 
+  plateform,
+  ROUND(
+    100 * MAX(CASE WHEN demographic = "Couples" THEN total_sales ELSE NULL END) / 
+    SUM(total_sales), 
+    2
+   ) AS couples_sales, 
+  ROUND(
+    100 * MAX(CASE WHEN demographic = "Families" THEN total_sales ELSE NULL END) / 
+    SUM(total_sales),
+    2
+  ) AS families_sales, 
+  ROUND(
+    100 * MAX(CASE WHEN demographic = "unknown" THEN total_sales ELSE NULL END) / 
+    SUM(total_sales),
+    2
+  ) AS unknown_sales
+FROM cte_total_sales 
+WHERE plateform = "Retail"
+GROUP BY 
+  plateform;
+```
+**Families : 32.18%**
+
+```sql
+WITH cte_total_sales AS (
+  SELECT
+    plateform,
+    age_band, 
+    SUM(sales) AS total_sales
+FROM data_mart.clean_weekly_sales 
+GROUP BY 
+  plateform,
+  age_band
+)
+SELECT 
+  plateform,
+  ROUND(
+    100 * MAX(CASE WHEN age_band = "Young Adults" THEN total_sales ELSE NULL END) / 
+    SUM(total_sales), 
+    2
+   ) AS young_adults_sales, 
+  ROUND(
+    100 * MAX(CASE WHEN age_band = "Middle Aged" THEN total_sales ELSE NULL END) / 
+    SUM(total_sales),
+    2
+  ) AS middle_aged_sales, 
+  ROUND(
+    100 * MAX(CASE WHEN age_band = "Retirees" THEN total_sales ELSE NULL END) / 
+    SUM(total_sales),
+    2
+  ) AS retirees_sales,
+  ROUND(
+    100 * MAX(CASE WHEN age_band = "unknown" THEN total_sales ELSE NULL END) / 
+    SUM(total_sales),
+    2
+  ) AS unknown_sales
+FROM cte_total_sales 
+WHERE plateform = "Retail"
+GROUP BY 
+  plateform;
+```
+
+**Retirees : 32.8%**
+
+**Families and Retiress are the categories which contribute the most to the Retail sales**
+
+## **Q9**
+
+> Can we use the `avg_transaction` column to find the average transaction size for each year for Retail vs Shopify? If not - how would you calculate it instead?
+
+```sql
+WITH cte_avg_transac_by_year_plateform AS (
+  SELECT 
+    calendar_year,
+    plateform, 
+    SUM(transactions) AS total_transactions, 
+    SUM(sales) AS total_sales 
+  FROM data_mart.clean_weekly_sales
+  GROUP BY 
+    calendar_year, 
+    plateform
+) 
+SELECT 
+  calendar_year, 
+  plateform, 
+  ROUND(total_sales/total_transactions) AS avg_transaction 
+FROM cte_avg_transac_by_year_plateform
+ORDER BY calendar_year;
+```
+
+![avg_transaction](img/avg_transaction.PNG)
+
