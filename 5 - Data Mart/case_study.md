@@ -472,3 +472,4 @@ WITH cte_total_sales_4_weeks AS (
 )
 ```
 ![12_weeks_after_before](img/12_weeks_after_before.png)
+
