@@ -359,3 +359,116 @@ ORDER BY calendar_year;
 
 ![avg_transaction](img/avg_transaction.PNG)
 
+# Before & After Analysis 
+
+*This technique is usually used when we inspect an important event and want to inspect the impact before and after a certain point in time.*
+
+**Event date : `2020-06-15`**
+
+Before further analysis, we have to create two new tables : one before the event and one after the event. 
+
+```sql
+DROP TABLE IF EXISTS `ferrous-syntax-352217`.data_mart.weekly_sales_before_event; 
+CREATE TABLE `ferrous-syntax-352217`.data_mart.weekly_sales_before_event AS (
+  SELECT 
+    week_date, 
+    SUM(sales) AS total_sales,
+    SUM(transactions) AS total_transactions,
+    SUM(sales)/SUM(transactions) AS avg_transaction, 
+    ROW_NUMBER() OVER( 
+      ORDER BY week_date DESC
+    ) AS _row_number
+  FROM data_mart.clean_weekly_sales 
+  WHERE week_date < "2020-06-15"
+  GROUP BY week_date
+);
+
+DROP TABLE IF EXISTS `ferrous-syntax-352217`.data_mart.weekly_sales_after_event; 
+CREATE TABLE `ferrous-syntax-352217`.data_mart.weekly_sales_after_event AS (
+  SELECT 
+    week_date, 
+    SUM(sales) AS total_sales,
+    SUM(transactions) AS total_transactions,
+    SUM(sales)/SUM(transactions) AS avg_transaction, 
+    ROW_NUMBER() OVER( 
+      ORDER BY week_date 
+    ) AS _row_number
+  FROM data_mart.clean_weekly_sales 
+  WHERE week_date >= "2020-06-15"
+  GROUP BY week_date
+)
+```
+
+After that we can select both 4 weeks after and before. 
+Then, we aggregate them. 
+
+```sql
+WITH cte_total_sales_4_weeks AS (
+  SELECT 
+    "before" AS event_state,
+    SUM(total_sales) AS total_sales_4_weeks, 
+    SUM(total_sales)/SUM(total_transactions) AS avg_transaction
+  FROM data_mart.weekly_sales_before_event
+  WHERE _row_number <= 4
+  UNION ALL 
+  SELECT 
+    "after" AS event_state, 
+    SUM(total_sales) AS total_sales_4_weeks,  
+    SUM(total_sales)/SUM(total_transactions) AS avg_transaction
+  FROM data_mart.weekly_sales_after_event
+  WHERE _row_number <= 4
+), 
+cte_ranked_period AS (
+  SELECT 
+    event_state, 
+    total_sales_4_weeks, 
+    avg_transaction, 
+    ROW_NUMBER() OVER(
+      ORDER BY event_state DESC
+    ) AS _row_state_order
+  FROM cte_total_sales_4_weeks
+), 
+cte_diff_bw_after_before AS (
+  SELECT 
+    event_state, 
+    total_sales_4_weeks, 
+    avg_transaction, 
+    LAG(total_sales_4_weeks) OVER(
+      ORDER BY _row_state_order
+    ) AS previous_total_sales, 
+    LAG(avg_transaction) OVER(
+      ORDER BY _row_state_order
+    ) AS previous_avg_transaction
+  FROM cte_ranked_period 
+)
+SELECT 
+  total_sales_4_weeks - previous_total_sales AS sales_diff, 
+  ROUND(
+      100 * ((CAST(total_sales_4_weeks AS NUMERIC) / previous_total_sales) - 1),
+      2
+    ) AS sales_change
+FROM cte_diff_bw_after_before
+WHERE event_state = "after";
+```
+![4_weeks_after_before](img/4_weeks_after_before.PNG)
+
+We can filter 12 weeks before. 
+
+```sql
+WITH cte_total_sales_4_weeks AS (
+  SELECT 
+    "before" AS event_state,
+    SUM(total_sales) AS total_sales_4_weeks, 
+    SUM(total_sales)/SUM(total_transactions) AS avg_transaction
+  FROM data_mart.weekly_sales_before_event
+  WHERE _row_number <= 12
+  UNION ALL 
+  SELECT 
+    "after" AS event_state, 
+    SUM(total_sales) AS total_sales_4_weeks,  
+    SUM(total_sales)/SUM(total_transactions) AS avg_transaction
+  FROM data_mart.weekly_sales_after_event
+  WHERE _row_number <= 12
+)
+```
+![12_weeks_after_before](img/12_weeks_after_before.PNG)
