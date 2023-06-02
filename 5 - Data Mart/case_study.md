@@ -473,3 +473,214 @@ WITH cte_total_sales_4_weeks AS (
 ```
 ![12_weeks_after_before](img/12_weeks_after_before.png)
 
+
+> How do the sale metrics for these 2 periods before and after compare with the previous years in 2018 and 2019?
+
+We have to seperate years 2019/2020 and year 2018 because of one week delay. 
+
+```sql
+DROP TABLE IF EXISTS `ferrous-syntax-352217`.data_mart.weekly_sales_before_event; 
+CREATE TABLE `ferrous-syntax-352217`.data_mart.weekly_sales_before_event AS (
+  SELECT 
+    calendar_year,
+    week_number, 
+    SUM(sales) AS total_sales,
+    SUM(transactions) AS total_transactions,
+    SUM(sales)/SUM(transactions) AS avg_transaction, 
+    ROW_NUMBER() OVER( 
+      PARTITION BY calendar_year
+      ORDER BY week_number DESC
+    ) AS _row_number
+  FROM data_mart.clean_weekly_sales 
+  WHERE week_number < 24
+  GROUP BY 
+    calendar_year, 
+    week_number
+);
+
+DROP TABLE IF EXISTS `ferrous-syntax-352217`.data_mart.weekly_sales_after_event; 
+CREATE TABLE `ferrous-syntax-352217`.data_mart.weekly_sales_after_event AS (
+  SELECT 
+    calendar_year, 
+    week_number,
+    SUM(sales) AS total_sales,
+    SUM(transactions) AS total_transactions,
+    SUM(sales)/SUM(transactions) AS avg_transaction, 
+    ROW_NUMBER() OVER( 
+      PARTITION BY calendar_year
+      ORDER BY week_number 
+    ) AS _row_number
+  FROM data_mart.clean_weekly_sales 
+  WHERE week_number >= 24
+  GROUP BY 
+    calendar_year,
+    week_number
+);
+
+DROP TABLE IF EXISTS `ferrous-syntax-352217`.data_mart.weekly_sales_before_event_2018; 
+CREATE TABLE `ferrous-syntax-352217`.data_mart.weekly_sales_before_event_2018 AS (
+  SELECT 
+    calendar_year,
+    week_number, 
+    SUM(sales) AS total_sales,
+    SUM(transactions) AS total_transactions,
+    SUM(sales)/SUM(transactions) AS avg_transaction, 
+    ROW_NUMBER() OVER( 
+      PARTITION BY calendar_year
+      ORDER BY week_number DESC
+    ) AS _row_number
+  FROM data_mart.clean_weekly_sales 
+  WHERE week_number < 25
+  GROUP BY 
+    calendar_year, 
+    week_number
+);
+
+DROP TABLE IF EXISTS `ferrous-syntax-352217`.data_mart.weekly_sales_after_event_2018; 
+CREATE TABLE `ferrous-syntax-352217`.data_mart.weekly_sales_after_event_2018 AS (
+  SELECT 
+    calendar_year, 
+    week_number,
+    SUM(sales) AS total_sales,
+    SUM(transactions) AS total_transactions,
+    SUM(sales)/SUM(transactions) AS avg_transaction, 
+    ROW_NUMBER() OVER( 
+      PARTITION BY calendar_year
+      ORDER BY week_number 
+    ) AS _row_number
+  FROM data_mart.clean_weekly_sales 
+  WHERE week_number >= 25
+  GROUP BY 
+    calendar_year,
+    week_number
+);
+```
+After creating the tables, we can use them to calculate the difference between 4 weeks before/after the event by year. 
+
+```sql
+CREATE TEMP TABLE weekly_sales_4weeks_2019_2020 AS (
+WITH cte_total_sales_4_weeks AS (
+  SELECT 
+    calendar_year,
+    "1.before" AS event_state,
+    SUM(total_sales) AS total_sales_4_weeks, 
+    SUM(total_sales)/SUM(total_transactions) AS avg_transaction
+  FROM data_mart.weekly_sales_before_event
+  WHERE _row_number <= 4
+  GROUP BY calendar_year
+  UNION ALL 
+  SELECT 
+    calendar_year,
+    "2.after" AS event_state, 
+    SUM(total_sales) AS total_sales_4_weeks,  
+    SUM(total_sales)/SUM(total_transactions) AS avg_transaction
+  FROM data_mart.weekly_sales_after_event
+  WHERE _row_number <= 4
+  GROUP BY calendar_year
+),
+cte_diff_bw_after_before AS (
+  SELECT 
+    calendar_year,
+    event_state, 
+    total_sales_4_weeks, 
+    avg_transaction, 
+    LAG(total_sales_4_weeks) OVER(
+      PARTITION BY calendar_year
+      ORDER BY event_state 
+    ) AS previous_total_sales, 
+    LAG(avg_transaction) OVER(
+      PARTITION BY calendar_year
+      ORDER BY event_state 
+    ) AS previous_avg_transaction
+  FROM cte_total_sales_4_weeks
+)
+SELECT 
+  calendar_year,
+  total_sales_4_weeks - previous_total_sales AS sales_diff, 
+  ROUND(
+      100 * ((CAST(total_sales_4_weeks AS NUMERIC) / previous_total_sales) - 1),
+      2
+    ) AS sales_change
+FROM cte_diff_bw_after_before 
+WHERE event_state = "2.after"
+AND calendar_year IN (2019, 2020)
+ORDER BY calendar_year
+); 
+
+CREATE TEMP TABLE weekly_sales_4weeks_2018 AS (
+WITH cte_total_sales_4_weeks AS (
+  SELECT 
+    calendar_year,
+    "1.before" AS event_state,
+    SUM(total_sales) AS total_sales_4_weeks, 
+    SUM(total_sales)/SUM(total_transactions) AS avg_transaction
+  FROM data_mart.weekly_sales_before_event_2018
+  WHERE _row_number <= 4
+  GROUP BY calendar_year
+  UNION ALL 
+  SELECT 
+    calendar_year,
+    "2.after" AS event_state, 
+    SUM(total_sales) AS total_sales_4_weeks,  
+    SUM(total_sales)/SUM(total_transactions) AS avg_transaction
+  FROM data_mart.weekly_sales_after_event_2018
+  WHERE _row_number <= 4
+  GROUP BY calendar_year
+),
+cte_diff_bw_after_before AS (
+  SELECT 
+    calendar_year,
+    event_state, 
+    total_sales_4_weeks, 
+    avg_transaction, 
+    LAG(total_sales_4_weeks) OVER(
+      PARTITION BY calendar_year
+      ORDER BY event_state 
+    ) AS previous_total_sales, 
+    LAG(avg_transaction) OVER(
+      PARTITION BY calendar_year
+      ORDER BY event_state 
+    ) AS previous_avg_transaction
+  FROM cte_total_sales_4_weeks
+)
+SELECT 
+  calendar_year,
+  total_sales_4_weeks - previous_total_sales AS sales_diff, 
+  ROUND(
+      100 * ((CAST(total_sales_4_weeks AS NUMERIC) / previous_total_sales) - 1),
+      2
+    ) AS sales_change
+FROM cte_diff_bw_after_before 
+WHERE event_state = "2.after"
+AND calendar_year = 2018
+); 
+
+SELECT * FROM weekly_sales_4weeks_2018
+UNION ALL
+SELECT * FROM weekly_sales_4weeks_2019_2020
+ORDER BY calendar_year; 
+```
+![4_weeks_after_before_by_year](img/4_weeks_after_before_by_year.png)
+
+If we want to do the same with 12 weeks, the only thing is to modify this part : 
+
+```sql
+  SELECT 
+    calendar_year,
+    "1.before" AS event_state,
+    SUM(total_sales) AS total_sales_4_weeks, 
+    SUM(total_sales)/SUM(total_transactions) AS avg_transaction
+  FROM data_mart.weekly_sales_before_event_2018
+  WHERE _row_number <= 4
+  GROUP BY calendar_year
+  UNION ALL 
+  SELECT 
+    calendar_year,
+    "2.after" AS event_state, 
+    SUM(total_sales) AS total_sales_4_weeks,  
+    SUM(total_sales)/SUM(total_transactions) AS avg_transaction
+  FROM data_mart.weekly_sales_after_event_2018
+  WHERE _row_number <= 4
+  GROUP BY calendar_year
+```
+![12_weeks_after_before_by_year](img/12_weeks_after_before_by_year.png)
