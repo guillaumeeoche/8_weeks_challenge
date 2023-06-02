@@ -684,3 +684,124 @@ If we want to do the same with 12 weeks, the only thing is to modify this part :
   GROUP BY calendar_year
 ```
 ![12_weeks_after_before_by_year](img/12_weeks_after_before_by_year.png)
+
+# Bonus Question
+
+Which areas of the business have the highest negative impact in sales metrics performance in 2020 for the 12 week before and after period?
+
+* region
+* platform
+* age_band
+* demographic
+* customer_type
+
+## region 
+
+```sql
+CREATE TEMP TABLE weekly_sales_12weeks_2020 AS (
+WITH cte_total_sales_12_weeks AS (
+  SELECT 
+    region,
+    "1.before" AS event_state,
+    SUM(total_sales) AS total_sales_12_weeks, 
+  FROM data_mart.weekly_sales_before_event
+  WHERE _row_number <= 12
+  GROUP BY region
+  UNION ALL 
+  SELECT 
+    region,
+    "2.after" AS event_state, 
+    SUM(total_sales) AS total_sales_12_weeks,  
+  FROM data_mart.weekly_sales_after_event
+  WHERE _row_number <= 12
+  GROUP BY region
+),
+cte_diff_bw_after_before AS (
+  SELECT 
+    region,
+    event_state, 
+    total_sales_12_weeks,
+    LAG(total_sales_12_weeks) OVER(
+      PARTITION BY region
+      ORDER BY event_state 
+    ) AS previous_total_sales, 
+  FROM cte_total_sales_12_weeks
+)
+SELECT 
+  region,
+  total_sales_12_weeks - previous_total_sales AS sales_diff, 
+  ROUND(
+      100 * ((CAST(total_sales_12_weeks AS NUMERIC) / previous_total_sales) - 1),
+      2
+    ) AS sales_change
+FROM cte_diff_bw_after_before 
+WHERE event_state = "2.after"
+); 
+
+
+SELECT * 
+FROM weekly_sales_12weeks_2020
+ORDER BY sales_change; 
+```
+
+![12_weeks_after_before_region](img/12_weeks_after_before_region.png)
+
+## plateform
+
+```sql
+CREATE TEMP TABLE weekly_sales_12weeks_2020 AS (
+WITH cte_total_sales_12_weeks AS (
+  SELECT 
+    plateform,
+    "1.before" AS event_state,
+    SUM(total_sales) AS total_sales_12_weeks, 
+  FROM data_mart.weekly_sales_before_event
+  WHERE _row_number <= 12
+  GROUP BY plateform
+  UNION ALL 
+  SELECT 
+    plateform,
+    "2.after" AS event_state, 
+    SUM(total_sales) AS total_sales_12_weeks,  
+  FROM data_mart.weekly_sales_after_event
+  WHERE _row_number <= 12
+  GROUP BY plateform
+),
+cte_diff_bw_after_before AS (
+  SELECT 
+    plateform,
+    event_state, 
+    total_sales_12_weeks,
+    LAG(total_sales_12_weeks) OVER(
+      PARTITION BY plateform
+      ORDER BY event_state 
+    ) AS previous_total_sales, 
+  FROM cte_total_sales_12_weeks
+)
+SELECT 
+  plateform,
+  total_sales_12_weeks - previous_total_sales AS sales_diff, 
+  ROUND(
+      100 * ((CAST(total_sales_12_weeks AS NUMERIC) / previous_total_sales) - 1),
+      2
+    ) AS sales_change
+FROM cte_diff_bw_after_before 
+WHERE event_state = "2.after"
+); 
+```
+![12_weeks_after_before_plateform](img/12_weeks_after_before_plateform.png)
+
+## age band
+
+![12_weeks_after_before_ageband](img/12_weeks_after_before_ageband.png)
+
+## demographic
+
+![12_weeks_after_before_demographic](img/12_weeks_after_before_demographic.png)
+
+## customer type
+
+![12_weeks_after_before_customertype](img/12_weeks_after_before_customertype.png)
+
+The date coincides with the end of plastic bags in Australia. This shows that new customers have new consumer habits. 
+This is also why retail is less popular and online sales are more important.
