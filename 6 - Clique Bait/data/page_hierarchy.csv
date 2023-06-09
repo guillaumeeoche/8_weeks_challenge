@@ -1,0 +1,14 @@
+page_id,page_name,product_category,product_id
+1,Home Page,,
+2,All Products,,
+12,Checkout,,
+13,Confirmation,,
+3,Salmon,Fish,1
+4,Kingfish,Fish,2
+5,Tuna,Fish,3
+6,Russian Caviar,Luxury,4
+7,Black Truffle,Luxury,5
+8,Abalone,Shellfish,6
+9,Lobster,Shellfish,7
+10,Crab,Shellfish,8
+11,Oyster,Shellfish,9
